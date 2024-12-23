@@ -1,2 +1,10 @@
 .vscode 
 .git
+*.o
+build
+ArrangeWindows
+arrange_windows
+Makefile
+CMakeFiles
+CMakeCache.txt
+cmake_install.cmake
