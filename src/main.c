@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with winmgm.  If not, see <https://www.gnu.org/licenses/>.
  *
- * Copyright (C) 2024 Ardinugraha
+ * Copyright (C) 2024 Ardi Nugraha
  */
 
 #include "X11_session.h"

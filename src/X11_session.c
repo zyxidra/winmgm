@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with winmgm.  If not, see <https://www.gnu.org/licenses/>.
  *
- * Copyright (C) 2024 Ardinugraha
+ * Copyright (C) 2024 Ardi Nugraha
  */
 
 #include "X11_session.h"
@@ -213,8 +213,7 @@ static Window *fetch_window_list(Display *display, Window root,
       LOG(WINMGM_WARN, "_NET_WM_DESKTOP atom is not supported by the "
                        "X server.\n");
       XFree(filtered_windows);
-      XFree(windows); // Free the original windows list before
-      // returning
+      XFree(windows);
       return NULL;
     }
 
@@ -238,7 +237,7 @@ static Window *fetch_window_list(Display *display, Window root,
   *nitems = filtered_count;
 
   if (windows != NULL) {
-    XFree(windows); // Only use XFree to free the windows
+    XFree(windows);
   }
 
   return filtered_windows;
@@ -251,7 +250,6 @@ static unsigned long int get_current_workspace(Display *display, Window root) {
   int actualFormat;
   unsigned long nItems, bytesAfter;
 
-  // Get the _NET_CURRENT_DESKTOP atom
   currentDesktopAtom = XInternAtom(display, "_NET_CURRENT_DESKTOP", True);
   if (currentDesktopAtom == None) {
     LOG(WINMGM_ERR, "_NET_CURRENT_DESKTOP not supported by the window "
@@ -260,7 +258,6 @@ static unsigned long int get_current_workspace(Display *display, Window root) {
     return -1;
   }
 
-  // Query the _NET_CURRENT_DESKTOP property
   if (XGetWindowProperty(display, root, currentDesktopAtom, 0, 1, False,
                          XA_CARDINAL, &actualType, &actualFormat, &nItems,
                          &bytesAfter, (unsigned char **)&desktop) == Success &&
@@ -486,7 +483,7 @@ void run_x11_layout() {
       arrange_window(base_win_items, windows, display, screen);
     }
 
-    XFree(windows); // Free the windows list after use
+    XFree(windows);
   }
 
   unsigned long curr_win_items = 0;
