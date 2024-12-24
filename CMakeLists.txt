@@ -12,14 +12,14 @@ file(GLOB_RECURSE SESSION_SOURCES "${SRC_DIR}/*.c")
 include_directories(${SRC_DIR}/session)
 
 # Create the executable
-add_executable(arrange_windows ${SRC_DIR}/main.c ${SESSION_SOURCES})
+add_executable(winmgm ${SRC_DIR}/main.c ${SESSION_SOURCES})
 
 
 # Check OS and adjust flags
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     message(STATUS "Operating System: Windows")
     # Windows-specific settings
-    target_link_libraries(arrange_windows PRIVATE gdi32)
+    target_link_libraries(winmgm PRIVATE gdi32)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     message(STATUS "Operating System: macOS")
     # macOS-specific settings (if any)
@@ -46,7 +46,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     else()
         message(STATUS "X11 is being used as the display server.")
-        target_link_libraries(arrange_windows PRIVATE X11)
+        target_link_libraries(winmgm PRIVATE X11)
         execute_process(
             COMMAND xprop -root _NET_WM_NAME
             RESULT_VARIABLE WM_RESULT
@@ -66,12 +66,12 @@ else()
     message(FATAL_ERROR "Unsupported Operating System: ${CMAKE_SYSTEM_NAME}")
 endif()
 
-target_include_directories(arrange_windows PRIVATE session)
+target_include_directories(winmgm PRIVATE session)
 
 add_custom_target(run
-    COMMAND arrange_windows
-    DEPENDS arrange_windows
+    COMMAND winmgm 
+    DEPENDS winmgm 
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-set_target_properties(arrange_windows PROPERTIES CLEAN_COMMAND "rm -f arrange_windows")
+set_target_properties(winmgm PROPERTIES CLEAN_COMMAND "rm -f winmgm")

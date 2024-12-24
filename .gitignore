@@ -2,9 +2,10 @@
 .git
 *.o
 build
-ArrangeWindows
-arrange_windows
+winmgm
 Makefile
 CMakeFiles
 CMakeCache.txt
 cmake_install.cmake
+.cache 
+nohup.out
