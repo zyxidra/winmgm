@@ -7,7 +7,19 @@
 
 const int WIN_APP_LIMIT = 5;
 
-int error_handler(Display *display, XErrorEvent *error) {
+static Display *initialize_display() {
+  Display *display = XOpenDisplay(NULL);
+  if (!display) {
+    LOG(WINMGM_ERR, "Cannot open display.\n");
+  }
+  return display;
+}
+
+static Window get_root_window(Display *display) {
+  return RootWindow(display, DefaultScreen(display));
+}
+
+static int error_handler(Display *display, XErrorEvent *error) {
   if (error->error_code == BadWindow) {
     LOG(WINMGM_ERR,
         "Caught BadWindow error: invalid window ID "
@@ -19,7 +31,7 @@ int error_handler(Display *display, XErrorEvent *error) {
   return 0; // Return 0 to prevent the program from terminating
 }
 
-void unmaximize_window(Display *display, Window window) {
+static void unmaximize_window(Display *display, Window window) {
   Atom wm_state = XInternAtom(display, "_NET_WM_STATE", False);
   Atom max_horz = XInternAtom(display, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
   Atom max_vert = XInternAtom(display, "_NET_WM_STATE_MAXIMIZED_VERT", False);
@@ -46,8 +58,8 @@ void unmaximize_window(Display *display, Window window) {
   XFlush(display);
 }
 
-void get_window_dimensions(Display *display, Window window, int *width,
-                           int *height) {
+static void get_window_dimensions(Display *display, Window window, int *width,
+                                  int *height) {
   if (display == NULL) {
     LOG(WINMGM_ERR, "Display is NULL.\n");
     return;
@@ -78,8 +90,8 @@ void get_window_dimensions(Display *display, Window window, int *width,
   *height = attributes.height;
 }
 
-void arrange_window(int window_count, Window windows[], Display *display,
-                    int screen) {
+static void arrange_window(int window_count, Window windows[], Display *display,
+                           int screen) {
   Screen *scr = ScreenOfDisplay(display, screen);
   int screen_width = scr->width;
   int screen_height = scr->height;
@@ -144,8 +156,9 @@ void arrange_window(int window_count, Window windows[], Display *display,
   }
 }
 
-Window *fetch_window_list(Display *display, Window root, unsigned long *nitems,
-                          Atom atom, int workspace_id) {
+static Window *fetch_window_list(Display *display, Window root,
+                                 unsigned long *nitems, Atom atom,
+                                 int workspace_id) {
   Atom actual_type;
   int actual_format;
   unsigned long bytes_after;
@@ -170,7 +183,7 @@ Window *fetch_window_list(Display *display, Window root, unsigned long *nitems,
   Window *filtered_windows = malloc(sizeof(Window) * (*nitems));
   if (filtered_windows == NULL) {
     LOG(WINMGM_ERR, " fail to allocate filtered_windows. \n");
-    XFree(windows); // Free the original windows list before returning
+    XFree(windows);
     return NULL;
   }
 
@@ -214,7 +227,7 @@ Window *fetch_window_list(Display *display, Window root, unsigned long *nitems,
   return filtered_windows;
 }
 
-unsigned long int get_current_workspace(Display *display, Window root) {
+static unsigned long int get_current_workspace(Display *display, Window root) {
   Atom currentDesktopAtom;
   unsigned long *desktop = NULL;
   Atom actualType;
@@ -306,19 +319,127 @@ Window get_last_opened_window(Display *display) {
   return 0;
 }
 
-void run_x11_layout() {
-  Display *display = XOpenDisplay(NULL);
-  if (!display) {
-    LOG(WINMGM_ERR, " Cannot open display.\n");
-    return;
+static unsigned long get_total_workspace(Display *display, Window root) {
+  Atom actual_type;
+  int actual_format;
+  unsigned long nitems, bytes_after;
+  unsigned char *data = NULL;
+  unsigned long total_workspaces = 0;
+  Atom desktops_atom = XInternAtom(display, "_NET_NUMBER_OF_DESKTOPS", True);
+
+  if (XGetWindowProperty(display, root, desktops_atom, 0, 1, False, XA_CARDINAL,
+                         &actual_type, &actual_format, &nitems, &bytes_after,
+                         &data) == Success) {
+    if (data) {
+      total_workspaces = *(unsigned long *)data;
+      XFree(data);
+    } else {
+      fprintf(stderr, "Failed to retrieve _NET_NUMBER_OF_DESKTOPS data.\n");
+    }
+  } else {
+    fprintf(stderr, "XGetWindowProperty failed for _NET_NUMBER_OF_DESKTOPS.\n");
   }
 
+  return total_workspaces;
+}
+
+static void manage_workspace_limit(Display *display, Window root, int screen,
+                                   int *base_workspace_num) {
+  unsigned long total_workspace = get_total_workspace(display, root);
+
+  for (int i = 0; i <= total_workspace; i++) {
+    Atom atom = XInternAtom(display, "_NET_CLIENT_LIST", True);
+    unsigned long total_win_items = 0;
+
+    Window *curr_win_open =
+        fetch_window_list(display, root, &total_win_items, atom, i);
+
+    if (total_win_items >= WIN_APP_LIMIT) {
+      LOG(WINMGM_INFO, "Reach win limit\n");
+      int window_left = total_win_items - WIN_APP_LIMIT;
+
+      while (1) {
+        (*base_workspace_num)++;
+        curr_win_open = fetch_window_list(display, root, &total_win_items, atom,
+                                          *base_workspace_num);
+        if (total_win_items < WIN_APP_LIMIT)
+          break;
+      }
+
+      for (int i = 0; i < window_left; i++) {
+        Window last_win_open = get_last_opened_window(display);
+        unmaximize_window(display, last_win_open);
+        move_window_to_workspace(display, last_win_open, *base_workspace_num);
+        arrange_window(total_win_items, curr_win_open, display, screen);
+      }
+    }
+  }
+}
+
+static void arrange_dimension(Display *display, Window root,
+                              unsigned long base_win_items,
+                              Window *curr_win_open, win_info *base_win_info,
+                              int screen) {
+  for (unsigned long int i = 0; i < base_win_items; i++) {
+    win_info *curr_win_info =
+        (win_info *)malloc(base_win_items * sizeof(win_info));
+    get_window_dimensions(display, curr_win_open[i], &curr_win_info[i].width,
+                          &curr_win_info[i].height);
+
+    if (curr_win_info[i].width != base_win_info[i].width ||
+        curr_win_info[i].height != base_win_info[i].height) {
+      unmaximize_window(display, curr_win_open[i]);
+      arrange_window(base_win_items, curr_win_open, display, screen);
+
+      base_win_info[i].width = curr_win_info[i].width;
+      base_win_info[i].height = curr_win_info[i].height;
+    }
+
+    free(curr_win_info);
+  }
+}
+
+static void manage_window(Display *display, Window root,
+                          unsigned long *base_win_items,
+                          win_info *base_win_info, int screen) {
+  unsigned long curr_win_items = 0;
+  Atom atom = XInternAtom(display, "_NET_CLIENT_LIST", True);
+  Window *curr_win_open =
+      fetch_window_list(display, root, &curr_win_items, atom,
+                        get_current_workspace(display, root));
+
+  if (curr_win_items != *base_win_items) {
+    LOG(WINMGM_INFO, "Re-arrange current window items...\n");
+
+    *base_win_items = curr_win_items;
+    for (unsigned long int i = 0; i < *base_win_items; i++) {
+      if (curr_win_open[i] != 0)
+        unmaximize_window(display, curr_win_open[i]);
+    }
+
+    if (curr_win_open)
+      arrange_window(*base_win_items, curr_win_open, display, screen);
+  }
+
+  arrange_dimension(display, root, *base_win_items, curr_win_open,
+                    base_win_info, screen);
+
+  if (curr_win_open)
+    free(curr_win_open);
+}
+
+void run_x11_layout() {
+  Display *display = initialize_display();
+  if (!display)
+    return;
+
   int screen = DefaultScreen(display);
-  Window root = RootWindow(display, screen);
+  Window root = get_root_window(display);
 
   unsigned long base_win_items = 0;
   win_info *base_win_info = NULL;
 
+  // Arrange the first window init
   Atom atom = XInternAtom(display, "_NET_CLIENT_LIST", True);
   int base_workspace_num = get_current_workspace(display, root);
   Window *windows = fetch_window_list(display, root, &base_win_items, atom,
@@ -344,69 +465,11 @@ void run_x11_layout() {
   XSetErrorHandler(error_handler);
 
   while (1) {
-    base_workspace_num = get_current_workspace(display, root);
+    unsigned long int total_workspace = get_total_workspace(display, root);
 
-    Atom atom = XInternAtom(display, "_NET_CLIENT_LIST", True);
-    Window *curr_win_open = fetch_window_list(display, root, &curr_win_items,
-                                              atom, base_workspace_num);
+    manage_workspace_limit(display, root, screen, &base_workspace_num);
+    manage_window(display, root, &base_win_items, base_win_info, screen);
 
-    if (curr_win_items >= WIN_APP_LIMIT) {
-      LOG(WINMGM_INFO, " Reach win limit \n");
-      int window_left = curr_win_items - WIN_APP_LIMIT;
-
-      while (1) {
-        base_workspace_num++;
-        curr_win_open = fetch_window_list(display, root, &curr_win_items, atom,
-                                          base_workspace_num);
-
-        if (curr_win_items < WIN_APP_LIMIT) {
-          break;
-        }
-      }
-      for (int i = 0; i <= window_left; i++) {
-        Window last_win_open = get_last_opened_window(display);
-
-        unmaximize_window(display, last_win_open);
-        move_window_to_workspace(display, last_win_open, base_workspace_num);
-        arrange_window(curr_win_items, curr_win_open, display, screen);
-      }
-
-      curr_win_items = 0;
-    } else if (curr_win_items < WIN_APP_LIMIT) {
-      if (curr_win_items != base_win_items) {
-        LOG(WINMGM_INFO, " Re-arrange current window items...\n");
-
-        base_win_items = curr_win_items;
-        for (unsigned long int i = 0; i < base_win_items; i++) {
-          if (curr_win_open[i] != 0)
-            unmaximize_window(display, curr_win_open[i]);
-        }
-
-        if (curr_win_open != NULL)
-          arrange_window(base_win_items, curr_win_open, display, screen);
-      }
-
-      if (curr_win_items > 1) {
-        for (unsigned long int i = 0; i < curr_win_items; i++) {
-          win_info *curr_win_info =
-              (win_info *)malloc(curr_win_items * sizeof(win_info));
-          get_window_dimensions(display, curr_win_open[i],
-                                &curr_win_info[i].width,
-                                &curr_win_info[i].height);
-
-          if (curr_win_info[i].width != base_win_info[i].width ||
-              curr_win_info[i].height != base_win_info[i].height) {
-            unmaximize_window(display, windows[i]);
-            arrange_window(base_win_items, curr_win_open, display, screen);
-
-            base_win_info[i].width = curr_win_info[i].width;
-            base_win_info[i].height = curr_win_info[i].height;
-          }
-          free(curr_win_info);
-        }
-        free(curr_win_open); // Free curr_win_open after
-      }
-    }
     usleep(20000);
   }
 
