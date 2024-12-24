@@ -3,7 +3,7 @@
 
 # winmgm
 
-`winmgm` is a window management tool inspired by `wmctrl` and tiling window managers. Unlike tiling window managers, `winmgm` allows you to manage application windows without relying on a full tiling manager. It's designed to provide flexibility for arranging and managing windows in a non-intrusive way, without imposing a tiling window management style.
+`winmgm` is stand for "Window Management",  a window management tool inspired by `wmctrl` and tiling window managers. Unlike tiling window managers, `winmgm` allows you to manage application windows without relying on a full tiling manager. It's designed to provide flexibility for arranging and managing windows in a non-intrusive way, without imposing a tiling window management style.
 
 This project is mainly targeted for users who prefer to manage windows in a more manual, customizable fashion while still benefiting from automation in tasks such as window resizing, arrangement, and workspace management. ⚙️
 
