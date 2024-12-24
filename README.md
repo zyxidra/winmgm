@@ -7,6 +7,71 @@
 
 This project is mainly targeted for users who prefer to manage windows in a more manual, customizable fashion while still benefiting from automation in tasks such as window resizing, arrangement, and workspace management. ⚙️
 
+# Layout Visualizations
+
+Here are various layout arrangements for windows. The configurations showcase how windows can be arranged in different layouts.
+
+---
+
+### Single Window Layout
+```
++-----------------------+
+|                       |
+|                       |
+|                       |
+|           1           |
+|           ^           |
+|                       |
+|                       |
++-----------------------+
+```
+
+---
+
+### Two Window Layouts
+#### Horizontal Split
+```
++-----------------------+
+|           |           |
+|           |           |
+|           |           |
+|     1     |     2     |
+|     ^     |     ^     |
+|           |           |
+|           |           |
++-----------------------+
+```
+
+#### Vertical Split
+```
++-----------------------+
+|           |           |
+|           |     2     |
+|           |           |
+|     1     |-----------|
+|     ^     |           |
+|           |     3     |
+|           |     ^     |
++-----------------------+
+```
+
+---
+
+### Three Window Layout
+#### Centered Split
+```
++-----------------------+
+|           |           |
+|     1     |     2     |
+|     ^     |           |
+|-----------|-----------|
+|           |           |
+|     4     |     3     |
+|           |           |
++-----------------------+
+```
+
+
 ### Note 📌:  
 Currently, `winmgm` **only supports Linux with X11**. It won’t work on Wayland or other windowing systems, and it’s not available on other operating systems (like macOS or Windows) at this time.
 
