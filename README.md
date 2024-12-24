@@ -65,12 +65,6 @@ For further development, you may also want to modify the configuration settings 
 
 ---
 
-## License 📜
-
-`winmgm` is licensed under the [MIT License](LICENSE). 
-
----
-
 ## Acknowledgements 🙏
 
 - Inspired by `wmctrl` and tiling window managers. 💡
