@@ -385,32 +385,75 @@ static void arrange_dimension(Display *display, Window root,
 }
 
 static void manage_window(Display *display, Window root,
-                          unsigned long *base_win_items,
-                          win_info *base_win_info, int screen) {
-  unsigned long curr_win_items = 0;
-  Atom atom = XInternAtom(display, "_NET_CLIENT_LIST", True);
-  Window *curr_win_open =
-      fetch_window_list(display, root, &curr_win_items, atom,
-                        get_current_workspace(display, root));
-
-  if (curr_win_items != *base_win_items) {
-    LOG(WINMGM_INFO, "Re-arrange current window items...\n");
-
-    *base_win_items = curr_win_items;
-    for (unsigned long int i = 0; i < *base_win_items; i++) {
-      if (curr_win_open[i] != 0)
-        unmaximize_window(display, curr_win_open[i]);
-    }
-
-    if (curr_win_open)
-      arrange_window(*base_win_items, curr_win_open, display, screen);
+                          unsigned long *previous_window_count,
+                          win_info *window_properties, int screen) {
+  if (!display || !previous_window_count || !window_properties) {
+    return;
   }
 
-  arrange_dimension(display, root, *base_win_items, curr_win_open,
-                    base_win_info, screen);
+  unsigned long total_workspace = get_total_workspace(display, root);
+  int current_workspace = get_current_workspace(display, root);
 
-  if (curr_win_open)
-    free(curr_win_open);
+  unsigned long current_window_count = 0;
+  Atom window_list_atom = XInternAtom(display, "_NET_CLIENT_LIST", True);
+
+  Window *active_windows;
+
+  for (int workspace = 0; workspace < total_workspace; workspace++) {
+    active_windows = fetch_window_list(display, root, &current_window_count,
+                                       window_list_atom, workspace);
+    if (!active_windows) {
+      continue;
+    }
+    if (current_window_count >= WIN_APP_LIMIT) {
+      int overflow_count = current_window_count - WIN_APP_LIMIT;
+      int free_workspace = 0;
+
+      while (1) {
+        active_windows = fetch_window_list(display, root, &current_window_count,
+                                           window_list_atom, free_workspace);
+        if (current_window_count < WIN_APP_LIMIT) {
+          break;
+        }
+        free_workspace++;
+      }
+
+      for (int i = 0; i <= overflow_count; i++) {
+        Window newest_window = get_last_opened_window(display);
+        if (newest_window) {
+          unmaximize_window(display, newest_window);
+          move_window_to_workspace(display, newest_window, free_workspace);
+          arrange_window(current_window_count, active_windows, display, screen);
+        }
+      }
+      current_window_count = 0;
+    }
+  }
+
+  active_windows = fetch_window_list(display, root, &current_window_count,
+                                     window_list_atom, current_workspace);
+
+  if (current_window_count != *previous_window_count) {
+    LOG(WINMGM_INFO, "Re-arrange current window items...\n");
+    *previous_window_count = current_window_count;
+
+    for (unsigned long i = 0; i < current_window_count; i++) {
+      if (active_windows[i]) {
+        unmaximize_window(display, active_windows[i]);
+      }
+    }
+
+    if (active_windows) {
+      arrange_window(current_window_count, active_windows, display, screen);
+    }
+  }
+
+  arrange_dimension(display, root, current_window_count, active_windows,
+                    window_properties, screen);
+
+  if (active_windows) {
+    XFree(active_windows);
+  }
 }
 
 void run_x11_layout() {
@@ -450,32 +493,6 @@ void run_x11_layout() {
   XSetErrorHandler(error_handler);
 
   while (1) {
-    unsigned long int total_workspace = get_total_workspace(display, root);
-
-    base_workspace_num = get_current_workspace(display, root);
-    Atom atom = XInternAtom(display, "_NET_CLIENT_LIST", True);
-    Window *curr_win_open = fetch_window_list(display, root, &curr_win_items,
-                                              atom, base_workspace_num);
-    if (curr_win_items >= WIN_APP_LIMIT) {
-      LOG(WINMGM_INFO, " Reach win limit \n");
-      int window_left = curr_win_items - WIN_APP_LIMIT;
-      while (1) {
-        base_workspace_num++;
-        curr_win_open = fetch_window_list(display, root, &curr_win_items, atom,
-                                          base_workspace_num);
-        if (curr_win_items < WIN_APP_LIMIT) {
-          break;
-        }
-      }
-      for (int i = 0; i <= window_left; i++) {
-        Window last_win_open = get_last_opened_window(display);
-        unmaximize_window(display, last_win_open);
-        move_window_to_workspace(display, last_win_open, base_workspace_num);
-        arrange_window(curr_win_items, curr_win_open, display, screen);
-      }
-      curr_win_items = 0;
-    }
-
     manage_window(display, root, &base_win_items, base_win_info, screen);
     usleep(20000);
   }
